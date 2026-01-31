@@ -11,7 +11,7 @@ use resolve_path::PathResolveExt;
 pub fn gen_thumbnail(input: &str, output: &str) -> anyhow::Result<()> {
     let img = image::open(input)?;
     let thumb = img.thumbnail(320, 150);
-    thumb.save_with_format(output, ImageFormat::WebP)?;
+    thumb.save_with_format(output, ImageFormat::Jpeg)?;
     Ok(())
 }
 

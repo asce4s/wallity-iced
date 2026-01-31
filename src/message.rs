@@ -6,4 +6,5 @@ pub enum Message {
     ScrolledTo(scrollable::Viewport),
     LoadVisibleThumbnails,
     ThumbnailLoaded(usize, iced_image::Handle),
+    ThumbnailGenerated(usize),
 }

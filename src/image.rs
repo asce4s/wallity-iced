@@ -7,4 +7,5 @@ pub struct WallpaperImage {
     pub thumbnail_path: String,
     pub thumbnail_handle: Option<image::Handle>,
     pub is_visible: bool,
+    pub has_thumbnail: bool,
 }

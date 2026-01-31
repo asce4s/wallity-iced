@@ -74,15 +74,16 @@ impl AppView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::WallpaperDiscovered(image) => {
+                let mut tasks = Vec::new();
                 self.images.push(image);
 
-                //load if in visible range
                 let idx = self.images.len() - 1;
+                //load if in visible range
                 if idx >= self.visible_range.0 && idx < self.visible_range.1 {
-                    Task::done(Message::LoadVisibleThumbnails)
-                } else {
-                    Task::none()
+                    tasks.push(Task::done(Message::LoadVisibleThumbnails));
                 }
+
+                Task::batch(tasks)
             }
             Message::ScrolledTo(viewport) => {
                 let scroll_offset = viewport.absolute_offset().y;
@@ -102,18 +103,18 @@ impl AppView {
                 );
 
                 // unload images not in visible range
-                let unload_distance = buffer + 10;
-                for (idx, img_data) in self.images.iter_mut().enumerate() {
-                    if (idx < self.visible_range.0.saturating_sub(unload_distance)
-                        || idx > self.visible_range.1 + unload_distance)
-                        && img_data.thumbnail_handle.is_some()
-                    {
-                        img_data.thumbnail_handle = None;
-                        img_data.is_visible = false;
-                    }
-                }
 
                 if new_range != self.visible_range {
+                    let unload_distance = buffer + 10;
+                    for (idx, img_data) in self.images.iter_mut().enumerate() {
+                        if (idx < self.visible_range.0.saturating_sub(unload_distance)
+                            || idx > self.visible_range.1 + unload_distance)
+                            && img_data.thumbnail_handle.is_some()
+                        {
+                            img_data.thumbnail_handle = None;
+                            img_data.is_visible = false;
+                        }
+                    }
                     self.visible_range = new_range;
                     Task::done(Message::LoadVisibleThumbnails)
                 } else {
@@ -128,7 +129,6 @@ impl AppView {
                         && !img_data.is_visible
                         && img_data.thumbnail_handle.is_none()
                     {
-                        img_data.is_visible = true;
                         let thumbnail_path = img_data.thumbnail_path.clone();
 
                         tasks.push(Task::perform(
@@ -140,10 +140,20 @@ impl AppView {
 
                 Task::batch(tasks)
             }
-
             Message::ThumbnailLoaded(idx, handle) => {
                 if let Some(img_data) = self.images.get_mut(idx) {
-                    img_data.thumbnail_handle = Some(handle)
+                    img_data.thumbnail_handle = Some(handle);
+                    img_data.is_visible = true;
+                }
+                Task::none()
+            }
+            Message::ThumbnailGenerated(idx) => {
+                if let Some(img_data) = self.images.get_mut(idx) {
+                    img_data.has_thumbnail = true;
+
+                    if idx >= self.visible_range.0 && idx < self.visible_range.1 {
+                        return Task::done(Message::LoadVisibleThumbnails);
+                    }
                 }
                 Task::none()
             }

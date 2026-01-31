@@ -4,19 +4,11 @@ use crate::{
     thumbnail::{gen_thumbnail, list_thumbnails},
 };
 
-use iced::widget::image;
 use rayon::prelude::*;
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashSet, sync::mpsc};
 
-pub fn load_wallpapers<F>(callback: F) -> Result<(), String>
-where
-    F: FnMut(WallpaperImage) + Send + 'static,
-{
+pub fn load_wallpapers(tx: mpsc::Sender<WallpaperImage>) -> Result<(), String> {
     let exts = ["png", "jpg", "jpeg", "webp"];
-    let callback = Arc::new(Mutex::new(callback));
 
     std::thread::spawn(move || {
         let thumbnails: HashSet<String> = list_thumbnails();
@@ -71,73 +63,82 @@ where
                 });
 
             // Process images WITH existing thumbnails first (instant UI feedback)
-            with_thumbnails.par_iter().for_each(|entry| {
-                let path = entry.path();
+            with_thumbnails
+                .par_iter()
+                .for_each_with(tx.clone(), |tx, entry| {
+                    let path = entry.path();
 
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if !exts.contains(&ext.as_str()) {
-                    return;
-                }
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if !exts.contains(&ext.as_str()) {
+                        return;
+                    }
 
-                let file_name = path.file_name().unwrap().to_string_lossy().to_string();
-                let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                let img_path = path.to_string_lossy().to_string();
-                let thumbnail_path = format!("{}/{}.webp", &thumbnail_path, &file_stem);
-                let image = WallpaperImage {
-                    name: file_name,
-                    img_path,
-                    thumbnail_path,
-                    thumbnail_handle: None,
-                    is_visible: false,
-                };
-                if let Ok(mut cb) = callback.lock() {
-                    cb(image);
-                }
-            });
-
-            // Then generate missing thumbnails and emit (doesn't block above)
-            without_thumbnails.par_iter().for_each(|entry| {
-                let path = entry.path();
-
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if !exts.contains(&ext.as_str()) {
-                    return;
-                }
-
-                let file_name = path.file_name().unwrap().to_string_lossy().to_string();
-                let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                let img_path = path.to_string_lossy().to_string();
-                let thumbnail_path = format!("{}/{}.webp", &thumbnail_path, &file_stem);
-
-                if gen_thumbnail(&img_path, &thumbnail_path).is_ok() {
+                    let file_name = path.file_name().unwrap().to_string_lossy().to_string();
+                    let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
+                    let img_path = path.to_string_lossy().to_string();
+                    let thumbnail_path = format!("{}/{}.jpeg", &thumbnail_path, &file_stem);
                     let image = WallpaperImage {
                         name: file_name,
                         img_path,
-                        thumbnail_handle: None,
                         thumbnail_path,
+                        thumbnail_handle: None,
                         is_visible: false,
+                        has_thumbnail: true,
                     };
+                    let _ = tx.send(image);
+                });
 
-                    if let Ok(mut cb) = callback.lock() {
-                        cb(image);
+            // Then generate missing thumbnails and emit (doesn't block above)
+            without_thumbnails
+                .par_iter()
+                .for_each_with(tx.clone(), |tx, entry| {
+                    let path = entry.path();
+
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if !exts.contains(&ext.as_str()) {
+                        return;
                     }
-                } else {
-                    eprintln!("Failed to generate thumbnail for: {}", img_path);
-                }
-            });
+
+                    let file_name = path.file_name().unwrap().to_string_lossy().to_string();
+                    let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
+                    let img_path = path.to_string_lossy().to_string();
+                    let thumbnail_path = format!("{}/{}.jpeg", &thumbnail_path, &file_stem);
+
+                    let image = WallpaperImage {
+                        name: file_name,
+                        img_path: img_path.clone(),
+                        thumbnail_handle: None,
+                        thumbnail_path: thumbnail_path.clone(),
+                        is_visible: false,
+                        has_thumbnail: false,
+                    };
+                    // let _ = tx.send(image);
+                    let img_path_clone = img_path.clone();
+                    let thumbnail_path_clone = thumbnail_path.clone();
+                    let image_clone = image.clone(); // Need to clone image
+                    let tx_clone = tx.clone(); // Need to clone tx
+
+                    std::thread::spawn(move || {
+                        if gen_thumbnail(&img_path_clone, &thumbnail_path_clone).is_ok() {
+                            let _ = tx_clone.send(image_clone);
+                        } else {
+                            eprintln!("Failed to generate thumbnail for: {}", img_path_clone);
+                        }
+                    });
+                });
 
             // Clean up orphaned thumbnails after main processing
             for thumbnail_stem in thumbnails {
                 if !valid_stems.contains(&thumbnail_stem) {
-                    let thumbnail_file = format!("{}/{}.webp", &thumbnail_path, &thumbnail_stem);
+                    let thumbnail_file = format!("{}/{}.jpeg", &thumbnail_path, &thumbnail_stem);
                     if let Err(e) = std::fs::remove_file(&thumbnail_file) {
                         eprintln!(
                             "Failed to remove orphaned thumbnail {}: {}",
