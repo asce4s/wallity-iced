@@ -1,6 +1,6 @@
 use iced::{
-    ContentFit, Element, Length, Pixels, Subscription, Task,
-    widget::{Image, container, grid, image as iced_image, scrollable, text},
+    Border, Color, ContentFit, Element, Length, Pixels, Subscription, Task,
+    widget::{Image, container, grid, image as iced_image, mouse_area, scrollable, text},
 };
 
 use crate::{events::wallpaper_stream, image::WallpaperImage, message::Message};
@@ -9,6 +9,7 @@ pub struct AppView {
     images: Vec<WallpaperImage>,
     visible_range: (usize, usize),
     images_per_row: usize,
+    hovered_image: Option<usize>,
 }
 
 impl AppView {
@@ -17,6 +18,7 @@ impl AppView {
             images: Vec::new(),
             visible_range: (0, 20),
             images_per_row: 4,
+            hovered_image: Some(0),
         }
     }
 
@@ -39,7 +41,7 @@ impl AppView {
             .spacing(Pixels(5.0))
             .height(Length::Shrink);
 
-        for img_data in self.images.iter() {
+        for (idx, img_data) in self.images.iter().enumerate() {
             let img_widget = if let Some(ref handle) = img_data.thumbnail_handle
                 && img_data.is_visible
             {
@@ -57,17 +59,42 @@ impl AppView {
                 .height(150)
                 .content_fit(ContentFit::Fill)
             };
-            g = g.push(container(img_widget).width(320).height(150).padding([5, 5]));
+            // Check if this image is hovered
+            let is_hovered = self.hovered_image == Some(idx);
+
+            // Create container with orange border when hovered
+            let container_widget = container(img_widget).width(320).height(150).padding([5, 5]);
+
+            // Apply orange border style when hovered
+            let styled_container = if is_hovered {
+                container_widget.style(|_theme| {
+                    container::Style {
+                        border: Border {
+                            color: Color::from_rgb(1.0, 0.647, 0.0), // Orange color
+                            width: 3.0,
+                            radius: 0.0.into(),
+                        },
+                        ..container::Style::default()
+                    }
+                })
+            } else {
+                container_widget
+            };
+
+            let final_widget = mouse_area(styled_container)
+                .on_enter(Message::ImageHovered(Some(idx)))
+                .on_exit(Message::ImageHovered(None));
+
+            g = g.push(final_widget);
         }
 
-        let scroll = scrollable(g)
+        let scroll = scrollable(container(g).padding(10))
             .height(Length::Fill)
             .on_scroll(Message::ScrolledTo);
 
         container(scroll)
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding([10, 10])
             .into()
     }
 
@@ -147,14 +174,8 @@ impl AppView {
                 }
                 Task::none()
             }
-            Message::ThumbnailGenerated(idx) => {
-                if let Some(img_data) = self.images.get_mut(idx) {
-                    img_data.has_thumbnail = true;
-
-                    if idx >= self.visible_range.0 && idx < self.visible_range.1 {
-                        return Task::done(Message::LoadVisibleThumbnails);
-                    }
-                }
+            Message::ImageHovered(idx) => {
+                self.hovered_image = idx;
                 Task::none()
             }
         }

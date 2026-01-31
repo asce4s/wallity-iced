@@ -12,5 +12,6 @@ mod wallpaper;
 fn main() -> iced::Result {
     iced::application(AppView::new, AppView::update, AppView::view)
         .subscription(AppView::subscription)
+        .centered()
         .run()
 }
