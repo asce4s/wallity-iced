@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fs::{self},
+    path::PathBuf,
 };
 
 use crate::config::CONFIG;
@@ -8,7 +9,7 @@ use crate::config::CONFIG;
 use image::ImageFormat;
 use resolve_path::PathResolveExt;
 
-pub fn gen_thumbnail(input: &str, output: &str) -> anyhow::Result<()> {
+pub fn gen_thumbnail(input: &PathBuf, output: &PathBuf) -> anyhow::Result<()> {
     let img = image::open(input)?;
     let thumb = img.thumbnail(320, 150);
     thumb.save_with_format(output, ImageFormat::Jpeg)?;

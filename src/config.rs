@@ -59,7 +59,6 @@ impl AppConfig {
 
     pub fn load() -> anyhow::Result<Self> {
         let config_path = resolve_file_path("~/.config/wallity/wallity.toml")?;
-
         let config_str = fs::read_to_string(&config_path).unwrap_or_default();
 
         let user_config: AppConfig = toml::from_str(&config_str).unwrap_or(AppConfig::empty());

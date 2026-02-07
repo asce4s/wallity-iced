@@ -11,7 +11,7 @@ pub fn wallpaper_stream() -> Subscription<Message> {
         stream::channel(
             500,
             |mut output: futures_mpsc::Sender<Message>| async move {
-                let (tx, rx) = mpsc::channel();
+                let (tx, rx) = mpsc::sync_channel(512);
                 let (bridge_tx, mut bridge_rx) = futures_mpsc::channel(500);
                 let bridge_tx_clone = bridge_tx.clone();
 

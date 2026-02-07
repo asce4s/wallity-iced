@@ -5,9 +5,9 @@ use crate::{
 };
 
 use rayon::prelude::*;
-use std::{collections::HashSet, sync::mpsc};
+use std::{collections::HashSet, path::PathBuf, sync::mpsc};
 
-pub fn load_wallpapers(tx: mpsc::Sender<WallpaperImage>) -> Result<(), String> {
+pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), String> {
     let exts = ["png", "jpg", "jpeg", "webp"];
 
     std::thread::spawn(move || {
@@ -31,36 +31,31 @@ pub fn load_wallpapers(tx: mpsc::Sender<WallpaperImage>) -> Result<(), String> {
                 .filter(|entry| entry.file_type().map(|f| f.is_file()).unwrap_or(false))
                 .collect();
 
-            // Collect valid wallpaper file stems for cleanup later
-            let valid_stems: HashSet<String> = entries
-                .par_iter()
-                .filter_map(|entry| {
-                    let path = entry.path();
-                    let ext = path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_lowercase();
-                    if exts.contains(&ext.as_str()) {
-                        path.file_stem()
-                            .and_then(|s| s.to_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            // Single scan: collect valid stems and split by thumbnail presence
+            let mut valid_stems: HashSet<String> = HashSet::new();
+            let mut with_thumbnails: Vec<_> = Vec::new();
+            let mut without_thumbnails: Vec<_> = Vec::new();
 
-            // Separate entries into those with/without thumbnails
-            let (with_thumbnails, without_thumbnails): (Vec<_>, Vec<_>) =
-                entries.into_par_iter().partition(|entry| {
-                    entry
-                        .path()
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(|s| thumbnails.contains(s))
-                        .unwrap_or(false)
-                });
+            for entry in entries {
+                let path = entry.path();
+                let ext_ok = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
+                    .unwrap_or(false);
+                if !ext_ok {
+                    continue;
+                }
+
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    valid_stems.insert(stem.to_string());
+                    if thumbnails.contains(stem) {
+                        with_thumbnails.push(entry);
+                    } else {
+                        without_thumbnails.push(entry);
+                    }
+                }
+            }
 
             // Process images WITH existing thumbnails first (instant UI feedback)
             with_thumbnails
@@ -68,26 +63,27 @@ pub fn load_wallpapers(tx: mpsc::Sender<WallpaperImage>) -> Result<(), String> {
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
 
-                    let ext = path
+                    let ext_ok = path
                         .extension()
                         .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_lowercase();
-                    if !exts.contains(&ext.as_str()) {
+                        .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
+                        .unwrap_or(false);
+                    if !ext_ok {
                         return;
                     }
 
                     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                    let img_path = path.to_string_lossy().to_string();
-                    let thumbnail_path = format!("{}/{}.jpeg", &thumbnail_path, &file_stem);
+                    let img_path = path;
+                    let thumbnail_path =
+                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path, &file_stem));
                     let image = WallpaperImage {
                         name: file_name,
                         img_path,
                         thumbnail_path,
                         thumbnail_handle: None,
                         is_visible: false,
-                        has_thumbnail: true,
+                        is_loading: false,
                     };
                     let _ = tx.send(image);
                 });
@@ -98,41 +94,35 @@ pub fn load_wallpapers(tx: mpsc::Sender<WallpaperImage>) -> Result<(), String> {
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
 
-                    let ext = path
+                    let ext_ok = path
                         .extension()
                         .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_lowercase();
-                    if !exts.contains(&ext.as_str()) {
+                        .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
+                        .unwrap_or(false);
+                    if !ext_ok {
                         return;
                     }
 
                     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                    let img_path = path.to_string_lossy().to_string();
-                    let thumbnail_path = format!("{}/{}.jpeg", &thumbnail_path, &file_stem);
+                    let img_path = path;
+                    let thumbnail_path =
+                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path, &file_stem));
 
                     let image = WallpaperImage {
                         name: file_name,
-                        img_path: img_path.clone(),
+                        img_path,
                         thumbnail_handle: None,
-                        thumbnail_path: thumbnail_path.clone(),
+                        thumbnail_path,
                         is_visible: false,
-                        has_thumbnail: false,
+                        is_loading: false,
                     };
-                    // let _ = tx.send(image);
-                    let img_path_clone = img_path.clone();
-                    let thumbnail_path_clone = thumbnail_path.clone();
-                    let image_clone = image.clone(); // Need to clone image
-                    let tx_clone = tx.clone(); // Need to clone tx
 
-                    std::thread::spawn(move || {
-                        if gen_thumbnail(&img_path_clone, &thumbnail_path_clone).is_ok() {
-                            let _ = tx_clone.send(image_clone);
-                        } else {
-                            eprintln!("Failed to generate thumbnail for: {}", img_path_clone);
-                        }
-                    });
+                    if gen_thumbnail(&image.img_path, &image.thumbnail_path).is_ok() {
+                        let _ = tx.send(image);
+                    } else {
+                        eprintln!("Failed to generate thumbnail for: {}", image.name);
+                    }
                 });
 
             // Clean up orphaned thumbnails after main processing
