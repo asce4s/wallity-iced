@@ -12,4 +12,5 @@ pub enum Message {
     ImageHovered(Option<usize>),
     KeyPressed(Key),
     WallpaperSelected,
+    ScrollToVisible,
 }

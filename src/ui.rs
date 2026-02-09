@@ -5,8 +5,11 @@ use std::process::Command;
 use iced::{
     Border, Color, ContentFit, Element, Length, Pixels, Subscription, Task, exit,
     keyboard::{self, key},
-    widget::{Image, column, container, grid, image as iced_image, mouse_area, scrollable, text},
-    window,
+    widget::{
+        Image, column, container, grid, image as iced_image, mouse_area,
+        operation::{self, AbsoluteOffset},
+        scrollable, text,
+    },
 };
 
 use crate::{config::CONFIG, events::wallpaper_stream, image::WallpaperImage, message::Message};
@@ -18,6 +21,7 @@ pub struct AppView {
     row_height: f32,
     placeholder_handle: iced_image::Handle,
     selected_idx: usize,
+    scroll_offset: f32,
 }
 
 impl AppView {
@@ -29,6 +33,7 @@ impl AppView {
             row_height: 155.0,
             placeholder_handle: iced_image::Handle::from_rgba(1, 1, vec![240, 240, 240, 255]),
             selected_idx: 0,
+            scroll_offset: 0.0,
         }
     }
 
@@ -118,7 +123,9 @@ impl AppView {
 
         let content = column![top_spacer, container(g).padding(10), bottom_spacer];
 
-        let scroll = scrollable(content).on_scroll(Message::ScrolledTo);
+        let scroll = scrollable(content)
+            .on_scroll(Message::ScrolledTo)
+            .id("scrollable-id");
 
         container(scroll)
             .width(Length::Fill)
@@ -141,6 +148,7 @@ impl AppView {
             }
             Message::ScrolledTo(viewport) => {
                 let scroll_offset = viewport.absolute_offset().y;
+                self.scroll_offset = scroll_offset;
                 let viewport_height = viewport.bounds().height;
 
                 let start_row = (scroll_offset / self.row_height).floor() as usize;
@@ -220,6 +228,7 @@ impl AppView {
                             let row = self.selected_idx / per_row;
                             if row > 0 {
                                 self.selected_idx -= per_row;
+                                return Task::done(Message::ScrollToVisible);
                             }
                             Task::none()
                         }
@@ -230,7 +239,7 @@ impl AppView {
                             } else {
                                 self.selected_idx = len - 1;
                             }
-                            Task::none()
+                            Task::done(Message::ScrollToVisible)
                         }
                         key::Named::ArrowLeft => {
                             let target_idx = self.selected_idx.saturating_sub(1);
@@ -242,6 +251,7 @@ impl AppView {
 
                             if target_idx < len {
                                 self.selected_idx = target_idx;
+                                return Task::done(Message::ScrollToVisible);
                             }
                             Task::none()
                         }
@@ -291,6 +301,35 @@ impl AppView {
                         }
                     });
                 }
+                Task::none()
+            }
+            Message::ScrollToVisible => {
+                let selected_row = self.selected_idx / self.images_per_row;
+                let selected_row_top = selected_row as f32 * self.row_height;
+                let selected_row_bottom = (selected_row + 1) as f32 * self.row_height;
+
+                let viewport_top = self.scroll_offset;
+                let viewport_bottom = viewport_top + 600.0;
+
+                if selected_row_bottom > viewport_bottom {
+                    let new_offset = selected_row_bottom - 600.0 + self.row_height;
+                    return operation::scroll_to(
+                        "scrollable-id",
+                        AbsoluteOffset {
+                            x: 0.0,
+                            y: new_offset,
+                        },
+                    );
+                } else if selected_row_top < viewport_top {
+                    return operation::scroll_to(
+                        "scrollable-id",
+                        AbsoluteOffset {
+                            x: 0.0,
+                            y: selected_row_top,
+                        },
+                    );
+                }
+
                 Task::none()
             }
         }
