@@ -304,15 +304,21 @@ impl AppView {
                 Task::none()
             }
             Message::ScrollToVisible => {
-                let selected_row = self.selected_idx / self.images_per_row;
-                let selected_row_top = selected_row as f32 * self.row_height;
-                let selected_row_bottom = (selected_row + 1) as f32 * self.row_height;
+                // Calculate actual visible bounds based on scroll position
+                let viewport_height = 600.0;
+                let start_row = (self.scroll_offset / self.row_height).floor() as usize;
+                let end_row =
+                    ((self.scroll_offset + viewport_height) / self.row_height).ceil() as usize;
 
-                let viewport_top = self.scroll_offset;
-                let viewport_bottom = viewport_top + 600.0;
+                let actual_visible_start = start_row * self.images_per_row;
+                let actual_visible_end =
+                    ((end_row + 1) * self.images_per_row).min(self.images.len());
 
-                if selected_row_bottom > viewport_bottom {
-                    let new_offset = selected_row_bottom - 600.0 + self.row_height;
+                // Only scroll if selected_idx is outside actual visible bounds
+                if self.selected_idx >= actual_visible_end {
+                    // Scroll down to show the next row
+                    let selected_row = self.selected_idx / self.images_per_row;
+                    let new_offset = selected_row as f32 * self.row_height;
                     return operation::scroll_to(
                         "scrollable-id",
                         AbsoluteOffset {
@@ -320,12 +326,15 @@ impl AppView {
                             y: new_offset,
                         },
                     );
-                } else if selected_row_top < viewport_top {
+                } else if self.selected_idx < actual_visible_start {
+                    // Scroll up to show the next row
+                    let selected_row = self.selected_idx / self.images_per_row;
+                    let new_offset = selected_row as f32 * self.row_height;
                     return operation::scroll_to(
                         "scrollable-id",
                         AbsoluteOffset {
                             x: 0.0,
-                            y: selected_row_top,
+                            y: new_offset,
                         },
                     );
                 }
