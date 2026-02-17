@@ -3,7 +3,7 @@ use std::os::unix::fs::symlink;
 use std::process::Command;
 
 use iced::{
-    Border, Color, ContentFit, Element, Length, Pixels, Subscription, Task, exit,
+    Alignment, Border, Color, ContentFit, Element, Length, Pixels, Subscription, Task, exit,
     keyboard::{self, key},
     widget::{
         Image, column, container, grid, image as iced_image, mouse_area,
@@ -14,11 +14,15 @@ use iced::{
 
 use crate::{config::CONFIG, events::wallpaper_stream, image::WallpaperImage, message::Message};
 
+const IMAGES_PER_ROW: usize = 4;
+const THUMBNAIL_WIDTH: f32 = 320.0;
+const THUMBNAIL_HEIGHT: f32 = 150.0;
+const ROW_HEIGHT: f32 = 155.0;
+const VIEWPORT_HEIGHT: f32 = 600.0;
+
 pub struct AppView {
     images: Vec<WallpaperImage>,
     visible_range: (usize, usize),
-    images_per_row: usize,
-    row_height: f32,
     placeholder_handle: iced_image::Handle,
     selected_idx: usize,
     scroll_offset: f32,
@@ -29,8 +33,6 @@ impl AppView {
         Self {
             images: Vec::new(),
             visible_range: (0, 20),
-            images_per_row: 4,
-            row_height: 155.0,
             placeholder_handle: iced_image::Handle::from_rgba(1, 1, vec![240, 240, 240, 255]),
             selected_idx: 0,
             scroll_offset: 0.0,
@@ -58,20 +60,20 @@ impl AppView {
         }
 
         let mut g = grid![]
-            .columns(self.images_per_row)
+            .columns(IMAGES_PER_ROW)
             .spacing(Pixels(5.0))
             .height(Length::Shrink);
 
-        let total_rows = self.images.len().div_ceil(self.images_per_row);
-        let start_row = self.visible_range.0 / self.images_per_row;
+        let total_rows = self.images.len().div_ceil(IMAGES_PER_ROW);
+        let start_row = self.visible_range.0 / IMAGES_PER_ROW;
         let end_row = self
             .visible_range
             .1
-            .div_ceil(self.images_per_row)
+            .div_ceil(IMAGES_PER_ROW)
             .min(total_rows);
 
-        let start_idx = start_row * self.images_per_row;
-        let end_idx = (end_row * self.images_per_row).min(self.images.len());
+        let start_idx = start_row * IMAGES_PER_ROW;
+        let end_idx = (end_row * IMAGES_PER_ROW).min(self.images.len());
 
         for idx in start_idx..end_idx {
             let img_data = &self.images[idx];
@@ -79,20 +81,23 @@ impl AppView {
                 && img_data.is_visible
             {
                 Image::new(handle.clone())
-                    .width(320)
-                    .height(150)
+                    .width(THUMBNAIL_WIDTH)
+                    .height(THUMBNAIL_HEIGHT)
                     .content_fit(ContentFit::Fill)
             } else {
                 Image::new(self.placeholder_handle.clone())
-                    .width(320)
-                    .height(150)
+                    .width(THUMBNAIL_WIDTH)
+                    .height(THUMBNAIL_HEIGHT)
                     .content_fit(ContentFit::Fill)
             };
 
             // Create container with orange border when hovered
-            let container_widget = container(img_widget).width(320).height(150).padding([5, 5]);
+            let container_widget = container(img_widget)
+                .width(THUMBNAIL_WIDTH)
+                .height(THUMBNAIL_HEIGHT)
+                .padding([5, 5]);
 
-            // Apply orange border style when hovered
+            // Apply orange border style when hovered/selected
             let styled_container = if self.selected_idx == idx {
                 container_widget.style(|_theme| {
                     container::Style {
@@ -115,10 +120,9 @@ impl AppView {
 
             g = g.push(final_widget);
         }
-        let top_spacer =
-            container(text("")).height(Length::Fixed(self.row_height * start_row as f32));
+        let top_spacer = container(text("")).height(Length::Fixed(ROW_HEIGHT * start_row as f32));
         let bottom_spacer = container(text("")).height(Length::Fixed(
-            self.row_height * (total_rows - end_row) as f32,
+            ROW_HEIGHT * (total_rows - end_row) as f32,
         ));
 
         let content = column![top_spacer, container(g).padding(10), bottom_spacer];
@@ -127,10 +131,26 @@ impl AppView {
             .on_scroll(Message::ScrolledTo)
             .id("scrollable-id");
 
-        container(scroll)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        let selected_wallpaper_name = self
+            .images
+            .get(self.selected_idx)
+            .map(|img| img.name.as_str())
+            .unwrap_or("");
+
+        let footer = container(
+            text(format!("Selected: {}", selected_wallpaper_name))
+                .size(16)
+                .color(Color::from_rgb(0.8, 0.8, 0.8)),
+        )
+        .width(Length::Fill)
+        .padding(10)
+        .align_x(Alignment::Center);
+
+        column![
+            container(scroll).width(Length::Fill).height(Length::Fill),
+            footer
+        ]
+        .into()
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -151,11 +171,11 @@ impl AppView {
                 self.scroll_offset = scroll_offset;
                 let viewport_height = viewport.bounds().height;
 
-                let start_row = (scroll_offset / self.row_height).floor() as usize;
-                let end_row = ((scroll_offset + viewport_height) / self.row_height).ceil() as usize;
+                let start_row = (scroll_offset / ROW_HEIGHT).floor() as usize;
+                let end_row = ((scroll_offset + viewport_height) / ROW_HEIGHT).ceil() as usize;
 
-                let start_idx = start_row * self.images_per_row;
-                let end_idx = ((end_row + 1) * self.images_per_row).min(self.images.len());
+                let start_idx = start_row * IMAGES_PER_ROW;
+                let end_idx = ((end_row + 1) * IMAGES_PER_ROW).min(self.images.len());
 
                 let buffer = 10;
                 let new_range = (
@@ -220,20 +240,18 @@ impl AppView {
             }
             Message::KeyPressed(key) => {
                 let len = self.images.len();
-                let per_row = self.images_per_row;
 
                 match key {
                     key::Key::Named(named) => match named {
                         key::Named::ArrowUp => {
-                            let row = self.selected_idx / per_row;
-                            if row > 0 {
-                                self.selected_idx -= per_row;
+                            if self.selected_idx >= IMAGES_PER_ROW {
+                                self.selected_idx -= IMAGES_PER_ROW;
                                 return Task::done(Message::ScrollToVisible);
                             }
                             Task::none()
                         }
                         key::Named::ArrowDown => {
-                            let target_idx = self.selected_idx + per_row;
+                            let target_idx = self.selected_idx + IMAGES_PER_ROW;
                             if target_idx < len {
                                 self.selected_idx = target_idx;
                             } else {
@@ -242,13 +260,14 @@ impl AppView {
                             Task::done(Message::ScrollToVisible)
                         }
                         key::Named::ArrowLeft => {
-                            let target_idx = self.selected_idx.saturating_sub(1);
-                            self.selected_idx = target_idx;
+                            if self.selected_idx > 0 {
+                                self.selected_idx -= 1;
+                                return Task::done(Message::ScrollToVisible);
+                            }
                             Task::none()
                         }
                         key::Named::ArrowRight => {
                             let target_idx = self.selected_idx + 1;
-
                             if target_idx < len {
                                 self.selected_idx = target_idx;
                                 return Task::done(Message::ScrollToVisible);
@@ -264,72 +283,63 @@ impl AppView {
             }
             Message::WallpaperSelected => {
                 if let Some(img_data) = self.images.get(self.selected_idx) {
-                    let current_wallpaper = CONFIG
-                        .current_wallpaper
-                        .clone()
-                        .expect("Current wallpaper path not configured");
+                    let current_wallpaper = CONFIG.current_wallpaper.clone();
+                    let post_script = CONFIG.post_script.clone();
 
-                    let post_script = CONFIG
-                        .post_script
-                        .clone()
-                        .expect("Post script not configured");
+                    if let Some(current_wallpaper) = current_wallpaper {
+                        let img_path = img_data.img_path.clone();
 
-                    let img_path = img_data.img_path.clone();
+                        // Spawn completely detached thread to prevent any UI blocking
+                        std::thread::spawn(move || {
+                            // Remove existing symlink/file (ignore error if doesn't exist)
+                            let _ = std::fs::remove_file(&current_wallpaper);
 
-                    // Spawn completely detached thread to prevent any UI blocking
-                    std::thread::spawn(move || {
-                        // Remove existing symlink/file (ignore error if doesn't exist)
-                        let _ = std::fs::remove_file(&current_wallpaper);
-
-                        // Create new symlink using native Rust API
-                        #[cfg(unix)]
-                        if let Err(e) = symlink(&img_path, &current_wallpaper) {
-                            eprintln!("Failed to create symlink: {}", e);
-                            return;
-                        }
-
-                        // Execute post script
-                        // Always use sh -c to handle both files (with args) and inline scripts
-                        match Command::new("sh").arg("-c").arg(&post_script).status() {
-                            Ok(status) if !status.success() => {
-                                eprintln!("Post script exited with non-zero status: {}", status);
+                            // Create new symlink using native Rust API
+                            #[cfg(unix)]
+                            if let Err(e) = symlink(&img_path, &current_wallpaper) {
+                                eprintln!("Failed to create symlink: {}", e);
+                                return;
                             }
-                            Err(e) => {
-                                eprintln!("Failed to execute post script: {}", e);
+
+                            if let Some(post_script) = post_script {
+                                if post_script.is_empty() {
+                                    return;
+                                }
+                                // Execute post script
+                                // Always use sh -c to handle both files (with args) and inline scripts
+                                match Command::new("sh").arg("-c").arg(&post_script).status() {
+                                    Ok(status) if !status.success() => {
+                                        eprintln!(
+                                            "Post script exited with non-zero status: {}",
+                                            status
+                                        );
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to execute post script: {}", e);
+                                    }
+                                    _ => {}
+                                }
                             }
-                            _ => {}
-                        }
-                    });
+                        });
+                    } else {
+                        eprintln!("Current wallpaper path not configured");
+                    }
                 }
                 Task::none()
             }
             Message::ScrollToVisible => {
                 // Calculate actual visible bounds based on scroll position
-                let viewport_height = 600.0;
-                let start_row = (self.scroll_offset / self.row_height).floor() as usize;
-                let end_row =
-                    ((self.scroll_offset + viewport_height) / self.row_height).ceil() as usize;
+                let start_row = (self.scroll_offset / ROW_HEIGHT).floor() as usize;
+                let end_row = ((self.scroll_offset + VIEWPORT_HEIGHT) / ROW_HEIGHT).ceil() as usize;
 
-                let actual_visible_start = start_row * self.images_per_row;
-                let actual_visible_end =
-                    ((end_row + 1) * self.images_per_row).min(self.images.len());
+                let actual_visible_start = start_row * IMAGES_PER_ROW;
+                let actual_visible_end = ((end_row + 1) * IMAGES_PER_ROW).min(self.images.len());
 
                 // Only scroll if selected_idx is outside actual visible bounds
-                if self.selected_idx >= actual_visible_end {
-                    // Scroll down to show the next row
-                    let selected_row = self.selected_idx / self.images_per_row;
-                    let new_offset = selected_row as f32 * self.row_height;
-                    return operation::scroll_to(
-                        "scrollable-id",
-                        AbsoluteOffset {
-                            x: 0.0,
-                            y: new_offset,
-                        },
-                    );
-                } else if self.selected_idx < actual_visible_start {
-                    // Scroll up to show the next row
-                    let selected_row = self.selected_idx / self.images_per_row;
-                    let new_offset = selected_row as f32 * self.row_height;
+                if self.selected_idx >= actual_visible_end || self.selected_idx < actual_visible_start
+                {
+                    let selected_row = self.selected_idx / IMAGES_PER_ROW;
+                    let new_offset = selected_row as f32 * ROW_HEIGHT;
                     return operation::scroll_to(
                         "scrollable-id",
                         AbsoluteOffset {
