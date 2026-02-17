@@ -17,14 +17,11 @@ pub fn wallpaper_stream() -> Subscription<Message> {
 
                 std::thread::spawn(move || {
                     while let Ok(img) = rx.recv() {
-                        // Use try_send to avoid blocking, or use a runtime with block_on
-                        // For simplicity, we'll use try_send and accept that it might fail if full
                         if bridge_tx_clone
                             .clone()
                             .try_send(Message::WallpaperDiscovered(img))
                             .is_err()
                         {
-                            // Channel closed or full - this shouldn't happen normally
                             break;
                         }
                     }

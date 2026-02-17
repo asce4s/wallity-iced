@@ -3650,7 +3650,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wallity-iced"
+name = "wallity"
 version = "0.1.0"
 dependencies = [
  "anyhow",
