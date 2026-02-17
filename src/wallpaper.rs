@@ -5,25 +5,34 @@ use crate::{
 };
 
 use rayon::prelude::*;
-use std::{collections::HashSet, path::PathBuf, sync::mpsc};
+use std::{collections::HashSet, path::Path, path::PathBuf, sync::mpsc};
+
+const SUPPORTED_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+
+fn is_supported_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| {
+            SUPPORTED_EXTENSIONS
+                .iter()
+                .any(|&supported| ext.eq_ignore_ascii_case(supported))
+        })
+        .unwrap_or(false)
+}
 
 pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), String> {
-    let exts = ["png", "jpg", "jpeg", "webp"];
-
     std::thread::spawn(move || {
         let thumbnails: HashSet<String> = list_thumbnails();
-        let thumbnail_path = CONFIG
-            .cache_path
-            .clone()
-            .unwrap()
-            .to_string_lossy()
-            .trim_end_matches("/")
-            .to_string();
+        let Some(ref thumbnail_path_base) = CONFIG.cache_path else {
+            eprintln!("Cache path not configured");
+            return;
+        };
+        let thumbnail_path_str = thumbnail_path_base.to_string_lossy();
 
-        let absolute_path = CONFIG
-            .wallpaper_path
-            .as_ref()
-            .expect("Wallpaper Path not found");
+        let Some(ref absolute_path) = CONFIG.wallpaper_path else {
+            eprintln!("Wallpaper Path not configured");
+            return;
+        };
 
         if let Ok(entries) = std::fs::read_dir(absolute_path) {
             let entries: Vec<_> = entries
@@ -38,12 +47,7 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
 
             for entry in entries {
                 let path = entry.path();
-                let ext_ok = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
-                    .unwrap_or(false);
-                if !ext_ok {
+                if !is_supported_extension(&path) {
                     continue;
                 }
 
@@ -62,24 +66,13 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
                 .par_iter()
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
-
-                    let ext_ok = path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
-                        .unwrap_or(false);
-                    if !ext_ok {
-                        return;
-                    }
-
                     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                    let img_path = path;
                     let thumbnail_path =
-                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path, &file_stem));
+                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path_str, &file_stem));
                     let image = WallpaperImage {
                         name: file_name,
-                        img_path,
+                        img_path: path,
                         thumbnail_path,
                         thumbnail_handle: None,
                         is_visible: false,
@@ -93,25 +86,14 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
                 .par_iter()
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
-
-                    let ext_ok = path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|ext| exts.iter().any(|&e| ext.eq_ignore_ascii_case(e)))
-                        .unwrap_or(false);
-                    if !ext_ok {
-                        return;
-                    }
-
                     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
-                    let img_path = path;
                     let thumbnail_path =
-                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path, &file_stem));
+                        PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path_str, &file_stem));
 
                     let image = WallpaperImage {
                         name: file_name,
-                        img_path,
+                        img_path: path,
                         thumbnail_handle: None,
                         thumbnail_path,
                         is_visible: false,
@@ -128,7 +110,8 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
             // Clean up orphaned thumbnails after main processing
             for thumbnail_stem in thumbnails {
                 if !valid_stems.contains(&thumbnail_stem) {
-                    let thumbnail_file = format!("{}/{}.jpeg", &thumbnail_path, &thumbnail_stem);
+                    let thumbnail_file =
+                        format!("{}/{}.jpeg", &thumbnail_path_str, &thumbnail_stem);
                     if let Err(e) = std::fs::remove_file(&thumbnail_file) {
                         eprintln!(
                             "Failed to remove orphaned thumbnail {}: {}",

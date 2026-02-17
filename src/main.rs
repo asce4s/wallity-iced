@@ -13,6 +13,7 @@ mod wallpaper;
 
 fn main() -> iced::Result {
     iced::application(AppView::new, AppView::update, AppView::view)
+        .title("Wallity - Wallpaper Manager")
         .subscription(AppView::subscription)
         .centered()
         .window(Settings {
