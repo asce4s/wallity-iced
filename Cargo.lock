@@ -3660,6 +3660,7 @@ dependencies = [
  "rayon",
  "resolve-path",
  "serde",
+ "tempfile",
  "toml",
 ]
 

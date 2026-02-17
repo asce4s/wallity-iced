@@ -3,6 +3,9 @@ name = "wallity"
 version = "0.1.0"
 edition = "2024"
 
+[dev-dependencies]
+tempfile = "3.17.1"
+
 [dependencies]
 anyhow = "1.0.100"
 image = "0.25.9"

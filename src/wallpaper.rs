@@ -125,3 +125,24 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_is_supported_extension() {
+        assert!(is_supported_extension(Path::new("test.png")));
+        assert!(is_supported_extension(Path::new("test.jpg")));
+        assert!(is_supported_extension(Path::new("test.jpeg")));
+        assert!(is_supported_extension(Path::new("test.webp")));
+
+        assert!(is_supported_extension(Path::new("test.PNG")));
+        assert!(is_supported_extension(Path::new("test.JPG")));
+
+        assert!(!is_supported_extension(Path::new("test.txt")));
+        assert!(!is_supported_extension(Path::new("test.gif")));
+        assert!(!is_supported_extension(Path::new("test")));
+    }
+}
