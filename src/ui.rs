@@ -121,9 +121,8 @@ impl AppView {
             g = g.push(final_widget);
         }
         let top_spacer = container(text("")).height(Length::Fixed(ROW_HEIGHT * start_row as f32));
-        let bottom_spacer = container(text("")).height(Length::Fixed(
-            ROW_HEIGHT * (total_rows - end_row) as f32,
-        ));
+        let bottom_spacer =
+            container(text("")).height(Length::Fixed(ROW_HEIGHT * (total_rows - end_row) as f32));
 
         let content = column![top_spacer, container(g).padding(10), bottom_spacer];
 
@@ -138,7 +137,7 @@ impl AppView {
             .unwrap_or("");
 
         let footer = container(
-            text(format!("Selected: {}", selected_wallpaper_name))
+            text(format!("{}", selected_wallpaper_name))
                 .size(16)
                 .color(Color::from_rgb(0.8, 0.8, 0.8)),
         )
@@ -336,7 +335,8 @@ impl AppView {
                 let actual_visible_end = ((end_row + 1) * IMAGES_PER_ROW).min(self.images.len());
 
                 // Only scroll if selected_idx is outside actual visible bounds
-                if self.selected_idx >= actual_visible_end || self.selected_idx < actual_visible_start
+                if self.selected_idx >= actual_visible_end
+                    || self.selected_idx < actual_visible_start
                 {
                     let selected_row = self.selected_idx / IMAGES_PER_ROW;
                     let new_offset = selected_row as f32 * ROW_HEIGHT;
