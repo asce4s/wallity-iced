@@ -3,6 +3,9 @@
 > **Work In Progress**  
 > This project is currently under active development. Features may be incomplete or subject to change.
 
+<img width="1914" height="1080" alt="image" src="https://github.com/user-attachments/assets/0170b490-c8c7-4e3d-8307-c88456562e9a" />
+
+
 A desktop wallpaper manager built with Rust and Iced, designed for **Wayland/Hyprland** environments.
 
 - Repository: https://github.com/asce4s/wallity-iced
