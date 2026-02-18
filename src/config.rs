@@ -106,4 +106,31 @@ mod tests {
         assert!(config.wallpaper_path.is_some());
         assert_eq!(config.post_script, Some("test".to_string()));
     }
+
+    #[test]
+    fn test_merge_all_fields() {
+        let mut config = AppConfig::empty();
+        let other = AppConfig {
+            wallpaper_path: Some(PathBuf::from("/wallpapers")),
+            current_wallpaper: Some(PathBuf::from("/current")),
+            post_script: Some("script".to_string()),
+            cache_path: Some(PathBuf::from("/cache")),
+        };
+        config = config.merge(other);
+        assert!(config.wallpaper_path.is_some());
+        assert!(config.current_wallpaper.is_some());
+        assert_eq!(config.post_script, Some("script".to_string()));
+        assert!(config.cache_path.is_some());
+    }
+
+    #[test]
+    fn test_merge_none() {
+        let original = AppConfig::default();
+        let merged = original.clone().merge(AppConfig::empty());
+
+        assert_eq!(original.wallpaper_path, merged.wallpaper_path);
+        assert_eq!(original.current_wallpaper, merged.current_wallpaper);
+        assert_eq!(original.post_script, merged.post_script);
+        assert_eq!(original.cache_path, merged.cache_path);
+    }
 }
