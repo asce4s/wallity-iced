@@ -27,11 +27,11 @@ mod navigation;
 mod tests;
 
 pub struct AppView {
-    pub images: Vec<WallpaperImage>,
+    pub(crate) images: Vec<WallpaperImage>,
+    pub(crate) selected_idx: usize,
     visible_range: (usize, usize),
     placeholder_handle: iced_image::Handle,
-    pub selected_idx: usize,
-    pub scroll_offset: f32,
+    scroll_offset: f32,
 }
 
 impl AppView {
@@ -103,15 +103,13 @@ impl AppView {
                 .padding([5, 5]);
 
             let styled_container = if self.selected_idx == idx {
-                container_widget.style(|_theme| {
-                    container::Style {
-                        border: Border {
-                            color: Color::from_rgb(1.0, 0.447, 0.0),
-                            width: 3.0,
-                            radius: 0.0.into(),
-                        },
-                        ..container::Style::default()
-                    }
+                container_widget.style(|_theme| container::Style {
+                    border: Border {
+                        color: Color::from_rgb(1.0, 0.447, 0.0),
+                        width: 3.0,
+                        radius: 0.0.into(),
+                    },
+                    ..container::Style::default()
                 })
             } else {
                 container_widget
