@@ -5,7 +5,7 @@ use iced::{
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    WallpaperDiscovered(crate::image::WallpaperImage),
+    WallpaperDiscovered(crate::wallpaper_image::WallpaperImage),
     ScrolledTo(scrollable::Viewport),
     LoadVisibleThumbnails,
     ThumbnailLoaded(usize, iced_image::Handle),
