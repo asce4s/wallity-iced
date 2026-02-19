@@ -1,7 +1,7 @@
 use crate::{
     config::CONFIG,
-    image::WallpaperImage,
     thumbnail::{gen_thumbnail, list_thumbnails},
+    wallpaper_image::WallpaperImage,
 };
 
 use rayon::prelude::*;
