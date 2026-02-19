@@ -67,6 +67,22 @@ fn test_app_view_update_key_navigation() {
 
     let _ = view.update(Message::KeyPressed(key::Key::Named(Named::ArrowLeft)));
     assert_eq!(view.selected_idx, 0);
+
+    // j = down
+    let _ = view.update(Message::KeyPressed(key::Key::Character("j".into())));
+    assert_eq!(view.selected_idx, IMAGES_PER_ROW);
+
+    // l = right
+    let _ = view.update(Message::KeyPressed(key::Key::Character("l".into())));
+    assert_eq!(view.selected_idx, IMAGES_PER_ROW + 1);
+
+    // k = up
+    let _ = view.update(Message::KeyPressed(key::Key::Character("k".into())));
+    assert_eq!(view.selected_idx, 1);
+
+    // h = left
+    let _ = view.update(Message::KeyPressed(key::Key::Character("h".into())));
+    assert_eq!(view.selected_idx, 0);
 }
 
 #[test]

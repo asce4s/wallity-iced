@@ -33,8 +33,9 @@ impl AppView {
                     self.selected_idx = target_idx;
                 } else {
                     self.selected_idx = len - 1;
+                    return Task::done(Message::ScrollToVisible);
                 }
-                Task::done(Message::ScrollToVisible)
+                Task::none()
             }
             Direction::Left => {
                 if self.selected_idx > 0 {
