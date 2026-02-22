@@ -66,12 +66,11 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
                 .par_iter()
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
-                    let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
                     let thumbnail_path =
                         PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path_str, &file_stem));
                     let image = WallpaperImage {
-                        name: file_name,
+                        name: file_stem,
                         img_path: path,
                         thumbnail_path,
                         thumbnail_handle: None,
@@ -86,13 +85,12 @@ pub fn load_wallpapers(tx: mpsc::SyncSender<WallpaperImage>) -> Result<(), Strin
                 .par_iter()
                 .for_each_with(tx.clone(), |tx, entry| {
                     let path = entry.path();
-                    let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     let file_stem = path.file_stem().unwrap().to_string_lossy().to_string();
                     let thumbnail_path =
                         PathBuf::from(format!("{}/{}.jpeg", &thumbnail_path_str, &file_stem));
 
                     let image = WallpaperImage {
-                        name: file_name,
+                        name: file_stem,
                         img_path: path,
                         thumbnail_handle: None,
                         thumbnail_path,

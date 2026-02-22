@@ -1,14 +1,15 @@
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
-use std::process::Command;
+use std::{collections::HashSet, process::Command};
 
 use iced::{
-    Alignment, Border, Color, ContentFit, Element, Length, Pixels, Subscription, Task, exit,
+    Alignment, Border, Color, ContentFit, Element, Length, Padding, Pixels, Subscription, Task,
+    exit,
     keyboard::{self, key},
     widget::{
         Image, column, container, grid, image as iced_image, mouse_area,
         operation::{self, AbsoluteOffset},
-        scrollable, text,
+        row, scrollable, text, text_input,
     },
 };
 
@@ -27,11 +28,13 @@ mod navigation;
 mod tests;
 
 pub struct AppView {
-    pub(crate) images: Vec<WallpaperImage>,
+    images: Vec<WallpaperImage>,
     pub(crate) selected_idx: usize,
     visible_range: (usize, usize),
     placeholder_handle: iced_image::Handle,
     scroll_offset: f32,
+    filter_value: String,
+    pub(crate) filtered_indices: Vec<usize>,
 }
 
 impl AppView {
@@ -42,6 +45,8 @@ impl AppView {
             placeholder_handle: iced_image::Handle::from_rgba(1, 1, vec![240, 240, 240, 255]),
             selected_idx: 0,
             scroll_offset: 0.0,
+            filter_value: String::from(""),
+            filtered_indices: Vec::new(),
         }
     }
 
@@ -70,7 +75,7 @@ impl AppView {
             .spacing(Pixels(5.0))
             .height(Length::Shrink);
 
-        let total_rows = self.images.len().div_ceil(IMAGES_PER_ROW);
+        let total_rows = self.filtered_indices.len().div_ceil(IMAGES_PER_ROW);
         let start_row = self.visible_range.0 / IMAGES_PER_ROW;
         let end_row = self
             .visible_range
@@ -79,9 +84,12 @@ impl AppView {
             .min(total_rows);
 
         let start_idx = start_row * IMAGES_PER_ROW;
-        let end_idx = (end_row * IMAGES_PER_ROW).min(self.images.len());
+        let end_idx = (end_row * IMAGES_PER_ROW).min(self.filtered_indices.len());
 
-        for idx in start_idx..end_idx {
+        for filterd_idx in start_idx..end_idx {
+            let Some(&idx) = self.filtered_indices.get(filterd_idx) else {
+                continue;
+            };
             let img_data = &self.images[idx];
             let img_widget = if let Some(ref handle) = img_data.thumbnail_handle
                 && img_data.is_visible
@@ -102,7 +110,7 @@ impl AppView {
                 .height(THUMBNAIL_HEIGHT)
                 .padding([5, 5]);
 
-            let styled_container = if self.selected_idx == idx {
+            let styled_container = if self.selected_idx == filterd_idx {
                 container_widget.style(|_theme| container::Style {
                     border: Border {
                         color: Color::from_rgb(1.0, 0.447, 0.0),
@@ -138,18 +146,27 @@ impl AppView {
             .map(|img| img.name.as_str())
             .unwrap_or("");
 
-        let footer = container(
+        let selected_img_name = container(
             text(selected_wallpaper_name)
                 .size(16)
                 .color(Color::from_rgb(0.8, 0.8, 0.8)),
         )
         .width(Length::Fill)
-        .padding(10)
-        .align_x(Alignment::Center);
+        .align_x(Alignment::End);
+
+        let filter_input =
+            text_input("Search...", &self.filter_value).on_input(Message::FilterChanged);
+
+        let footer_row = row![filter_input, selected_img_name].padding(Padding {
+            top: 10.0,
+            left: 15.0,
+            bottom: 15.0,
+            right: 15.0,
+        });
 
         column![
             container(scroll).width(Length::Fill).height(Length::Fill),
-            footer
+            footer_row
         ]
         .into()
     }
@@ -159,6 +176,7 @@ impl AppView {
             Message::WallpaperDiscovered(image) => {
                 self.images.push(image);
 
+                self.compute_filter();
                 let idx = self.images.len() - 1;
                 if idx >= self.visible_range.0 && idx < self.visible_range.1 {
                     return Task::done(Message::LoadVisibleThumbnails);
@@ -175,20 +193,26 @@ impl AppView {
                 let end_row = ((scroll_offset + viewport_height) / ROW_HEIGHT).ceil() as usize;
 
                 let start_idx = start_row * IMAGES_PER_ROW;
-                let end_idx = ((end_row + 1) * IMAGES_PER_ROW).min(self.images.len());
+                let end_idx = ((end_row + 1) * IMAGES_PER_ROW).min(self.filtered_indices.len());
 
                 let buffer = 10;
                 let new_range = (
                     start_idx.saturating_sub(buffer),
-                    (end_idx + buffer).min(self.images.len()),
+                    (end_idx + buffer).min(self.filtered_indices.len()),
                 );
 
                 if new_range != self.visible_range {
                     self.visible_range = new_range;
-                    let unload_distance = buffer + 10;
+
+                    let visible_filtered_idx: HashSet<usize> =
+                        self.filtered_indices[new_range.0.min(self.filtered_indices.len())
+                            ..new_range.1.min(self.filtered_indices.len())]
+                            .iter()
+                            .copied()
+                            .collect();
+
                     for (idx, img_data) in self.images.iter_mut().enumerate() {
-                        if (idx < self.visible_range.0.saturating_sub(unload_distance)
-                            || idx > self.visible_range.1 + unload_distance)
+                        if visible_filtered_idx.contains(&idx)
                             && img_data.thumbnail_handle.is_some()
                         {
                             img_data.thumbnail_handle = None;
@@ -204,7 +228,10 @@ impl AppView {
             Message::LoadVisibleThumbnails => {
                 let mut tasks = Vec::new();
 
-                for idx in self.visible_range.0..self.visible_range.1 {
+                for filtered_idx in self.visible_range.0..self.visible_range.1 {
+                    let Some(&idx) = self.filtered_indices.get(filtered_idx) else {
+                        continue;
+                    };
                     if let Some(img_data) = self.images.get_mut(idx)
                         && !img_data.is_visible
                         && !img_data.is_loading
@@ -319,6 +346,25 @@ impl AppView {
 
                 Task::none()
             }
+            Message::FilterChanged(value) => {
+                self.filter_value = value;
+                self.compute_filter();
+                Task::done(Message::LoadVisibleThumbnails)
+            }
         }
+    }
+
+    fn compute_filter(&mut self) {
+        let query = self.filter_value.to_lowercase();
+
+        self.filtered_indices = self
+            .images
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, v)| {
+                (query.is_empty() || v.name.to_lowercase().contains(&query)).then_some(idx)
+            })
+            .collect();
+        self.selected_idx = 0
     }
 }

@@ -13,4 +13,5 @@ pub enum Message {
     KeyPressed(Key),
     WallpaperSelected,
     ScrollToVisible,
+    FilterChanged(String),
 }
