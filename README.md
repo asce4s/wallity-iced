@@ -35,6 +35,23 @@ This application is specifically designed for:
 
 ## Installation
 
+### AUR (Arch Linux)
+
+Install the latest git version using your preferred AUR helper:
+
+```bash
+# Using paru
+paru -S wallity-git
+
+# Using yay
+yay -S wallity-git
+
+# Manually with makepkg
+git clone https://aur.archlinux.org/wallity-git.git
+cd wallity-git
+makepkg -si
+```
+
 ### From Source
 
 1. Clone the repository:
