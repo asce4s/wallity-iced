@@ -131,7 +131,7 @@ impl AppView {
             };
 
             let final_widget = mouse_area(styled_container)
-                .on_enter(Message::ImageHovered(Some(idx)))
+                .on_enter(Message::ImageHovered(Some(filterd_idx)))
                 .on_exit(Message::ImageHovered(None))
                 .on_press(Message::WallpaperSelected);
 
@@ -148,8 +148,9 @@ impl AppView {
             .id("scrollable-id");
 
         let selected_wallpaper_name = self
-            .images
+            .filtered_indices
             .get(self.selected_idx)
+            .and_then(|&idx| self.images.get(idx))
             .map(|img| img.name.as_str())
             .unwrap_or("");
 
@@ -255,7 +256,7 @@ impl AppView {
                             .collect();
 
                     for (idx, img_data) in self.images.iter_mut().enumerate() {
-                        if visible_filtered_idx.contains(&idx)
+                        if !visible_filtered_idx.contains(&idx)
                             && img_data.thumbnail_handle.is_some()
                         {
                             img_data.thumbnail_handle = None;
@@ -392,7 +393,8 @@ impl AppView {
                 let end_row = ((self.scroll_offset + VIEWPORT_HEIGHT) / ROW_HEIGHT).ceil() as usize;
 
                 let actual_visible_start = start_row * IMAGES_PER_ROW;
-                let actual_visible_end = ((end_row + 1) * IMAGES_PER_ROW).min(self.images.len());
+                let actual_visible_end =
+                    ((end_row + 1) * IMAGES_PER_ROW).min(self.filtered_indices.len());
 
                 if self.selected_idx >= actual_visible_end
                     || self.selected_idx < actual_visible_start
