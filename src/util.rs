@@ -10,11 +10,9 @@ pub fn get_absolute_path(path: &str) -> Result<PathBuf> {
 
 pub fn resolve_file_path(path: &str) -> Result<PathBuf> {
     let resolved = get_absolute_path(path)?;
-    if let Some(parent) = resolved.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create parent directory for: {}", path))?;
-        }
+    if let Some(parent) = resolved.parent().filter(|p| !p.exists()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create parent directory for: {}", path))?;
     }
 
     Ok(resolved)

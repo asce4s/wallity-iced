@@ -20,6 +20,7 @@ fn main() -> iced::Result {
         .window(Settings {
             resizable: false,
             size: Size::new(896.0, 800.0),
+            transparent: false,
             ..Settings::default()
         })
         .run()

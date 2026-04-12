@@ -27,7 +27,13 @@ mod navigation;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, PartialEq)]
+enum Mode {
+    Normal,
+    Insert,
+}
 pub struct AppView {
+    mode: Mode,
     images: Vec<WallpaperImage>,
     pub(crate) selected_idx: usize,
     visible_range: (usize, usize),
@@ -40,6 +46,7 @@ pub struct AppView {
 impl AppView {
     pub fn new() -> Self {
         Self {
+            mode: Mode::Normal,
             images: Vec::new(),
             visible_range: (0, 20),
             placeholder_handle: iced_image::Handle::from_rgba(1, 1, vec![240, 240, 240, 255]),
@@ -154,8 +161,9 @@ impl AppView {
         .width(Length::Fill)
         .align_x(Alignment::End);
 
-        let filter_input =
-            text_input("Search...", &self.filter_value).on_input(Message::FilterChanged);
+        let filter_input = text_input("Search...", &self.filter_value)
+            .on_input(Message::FilterChanged)
+            .id("filter-input");
 
         let footer_row = row![filter_input, selected_img_name].padding(Padding {
             top: 10.0,
@@ -164,9 +172,44 @@ impl AppView {
             right: 15.0,
         });
 
+        let keybinds = row![
+            text("hjkl").size(12).color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text(" navigate  ")
+                .size(12)
+                .color(Color::from_rgb(0.4, 0.4, 0.4)),
+            text("/").size(12).color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text(" search  ")
+                .size(12)
+                .color(Color::from_rgb(0.4, 0.4, 0.4)),
+            text("Enter").size(12).color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text(" select  ")
+                .size(12)
+                .color(Color::from_rgb(0.4, 0.4, 0.4)),
+            text("Esc").size(12).color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text(" normal")
+                .size(12)
+                .color(Color::from_rgb(0.4, 0.4, 0.4)),
+        ];
+
+        let bottom_bar = row![
+            text(format!("Wallity v{0}", env!("CARGO_PKG_VERSION")))
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            container(keybinds)
+                .width(Length::Fill)
+                .align_x(Alignment::End)
+        ]
+        .padding(Padding {
+            top: 0.0,
+            left: 15.0,
+            right: 15.0,
+            bottom: 15.0,
+        });
+
         column![
             container(scroll).width(Length::Fill).height(Length::Fill),
-            footer_row
+            footer_row,
+            bottom_bar
         ]
         .into()
     }
@@ -263,27 +306,48 @@ impl AppView {
                 }
                 Task::none()
             }
-            Message::KeyPressed(key) => match key {
-                key::Key::Named(named) => match named {
-                    key::Named::ArrowUp => self.move_selection(Direction::Up),
-                    key::Named::ArrowDown => self.move_selection(Direction::Down),
-                    key::Named::ArrowLeft => self.move_selection(Direction::Left),
-                    key::Named::ArrowRight => self.move_selection(Direction::Right),
-                    key::Named::Enter => Task::done(Message::WallpaperSelected),
-                    key::Named::Escape => exit(),
+            Message::KeyPressed(key) => match &self.mode {
+                Mode::Insert => match key {
+                    key::Key::Named(key::Named::Escape) => {
+                        self.mode = Mode::Normal;
+                        Task::none()
+                    }
+                    key::Key::Named(key::Named::Enter) => {
+                        self.mode = Mode::Normal;
+                        operation::focus_next()
+                    }
                     _ => Task::none(),
                 },
-                key::Key::Character(c) => match c.as_str() {
-                    "h" => self.move_selection(Direction::Left),
-                    "j" => self.move_selection(Direction::Down),
-                    "k" => self.move_selection(Direction::Up),
-                    "l" => self.move_selection(Direction::Right),
+                Mode::Normal => match key {
+                    key::Key::Named(named) => match named {
+                        key::Named::ArrowUp => self.move_selection(Direction::Up),
+                        key::Named::ArrowDown => self.move_selection(Direction::Down),
+                        key::Named::ArrowLeft => self.move_selection(Direction::Left),
+                        key::Named::ArrowRight => self.move_selection(Direction::Right),
+                        key::Named::Enter => Task::done(Message::WallpaperSelected),
+                        key::Named::Escape => exit(),
+                        _ => Task::none(),
+                    },
+                    key::Key::Character(c) => match c.as_str() {
+                        "h" => self.move_selection(Direction::Left),
+                        "j" => self.move_selection(Direction::Down),
+                        "k" => self.move_selection(Direction::Up),
+                        "l" => self.move_selection(Direction::Right),
+                        "/" => {
+                            self.mode = Mode::Insert;
+                            operation::focus("filter-input")
+                        }
+                        _ => Task::none(),
+                    },
                     _ => Task::none(),
                 },
-                _ => Task::none(),
             },
             Message::WallpaperSelected => {
-                if let Some(img_data) = self.images.get(self.selected_idx) {
+                if let Some(img_data) = self
+                    .filtered_indices
+                    .get(self.selected_idx)
+                    .and_then(|&idx| self.images.get(idx))
+                {
                     let current_wallpaper = CONFIG.current_wallpaper.clone();
                     let post_script = CONFIG.post_script.clone();
 

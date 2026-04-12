@@ -9,7 +9,7 @@ tempfile = "3.17.1"
 [dependencies]
 anyhow = "1.0.100"
 image = "0.25.9"
-iced = { version = "0.14", features = ["wgpu", "image"] }
+iced = { version = "0.14", features = [ "image","wgpu"] }
 once_cell = "1.21.3"
 rayon = "1.11.0"
 resolve-path = "0.1.0"
@@ -22,3 +22,5 @@ lto = "fat"
 opt-level = 3
 panic = "abort"
 strip = "symbols"
+
+
