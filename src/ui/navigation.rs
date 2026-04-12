@@ -13,9 +13,9 @@ pub(super) enum Direction {
 
 impl AppView {
     pub(super) fn move_selection(&mut self, direction: Direction) -> Task<Message> {
-        let len = self.images.len();
+        let len = self.filtered_indices.len();
 
-        if self.images.is_empty() {
+        if len == 0 {
             return Task::none();
         }
 
@@ -33,9 +33,8 @@ impl AppView {
                     self.selected_idx = target_idx;
                 } else {
                     self.selected_idx = len - 1;
-                    return Task::done(Message::ScrollToVisible);
                 }
-                Task::none()
+                Task::done(Message::ScrollToVisible)
             }
             Direction::Left => {
                 if self.selected_idx > 0 {

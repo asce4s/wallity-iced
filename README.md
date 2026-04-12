@@ -21,9 +21,48 @@ This application is specifically designed for:
 
 - Browse and manage wallpapers
 - Virtual scrolling for performance
-- Keyboard navigation support
+- Keyboard navigation (including vi-style keys) and mouse hover selection
+- Search / filter wallpapers by filename
 - Thumbnail generation and caching
 - Config file support
+
+## Usage
+
+### Navigation
+
+Move the selection through the **filtered** grid (the orange border shows the focused thumbnail):
+
+| Input | Action |
+| --- | --- |
+| `h` / `←` | Move left |
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
+| `l` / `→` | Move right |
+| Mouse | Hovering a thumbnail moves the selection to it |
+
+The view scrolls automatically when the selection moves outside the visible area.
+
+### Applying a wallpaper
+
+With a thumbnail selected, press **Enter** (or click the thumbnail) to set that image as the current wallpaper (symlink + optional `post_script` from config).
+
+### Search / filter
+
+- Press **`/`** to focus the search field at the bottom of the window (same as the in-app hint: `/ search`).
+- You can also **click** the search box labeled “Search…”.
+- Type a substring; matching is **case-insensitive** against each file’s **basename**.
+- Clear the field to show all wallpapers again.
+
+While the search field is focused:
+
+| Key | Action |
+| --- | --- |
+| **Enter** | Leave the search field and return to navigation mode |
+| **Esc** | Return to navigation mode (search text is kept) |
+
+In navigation mode, **Esc** quits the application.
+
+Key hints are shown in the status bar at the bottom (`hjkl`, `/`, `Enter`, `Esc`).
 
 ## Tech Stack
 
