@@ -50,7 +50,7 @@ fn test_app_view_update_hover() {
 fn test_app_view_update_key_navigation() {
     let mut view = AppView::new();
     for i in 0..10 {
-        view.images.push(create_dummy_image(&i.to_string()));
+        let _ = view.update(Message::WallpaperDiscovered(create_dummy_image(&i.to_string())));
     }
 
     let _ = view.update(Message::KeyPressed(key::Key::Named(Named::ArrowDown)));
@@ -89,7 +89,7 @@ fn test_app_view_update_key_navigation() {
 fn test_app_view_update_key_navigation_edge_cases() {
     let mut view = AppView::new();
     for i in 0..2 {
-        view.images.push(create_dummy_image(&i.to_string()));
+        let _ = view.update(Message::WallpaperDiscovered(create_dummy_image(&i.to_string())));
     }
 
     let _ = view.update(Message::KeyPressed(key::Key::Named(Named::ArrowDown)));
