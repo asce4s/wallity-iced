@@ -222,8 +222,10 @@ impl AppView {
 
                 self.compute_filter();
                 let idx = self.images.len() - 1;
-                if idx >= self.visible_range.0 && idx < self.visible_range.1 {
-                    return Task::done(Message::LoadVisibleThumbnails);
+                if let Some(filtered_pos) = self.filtered_indices.iter().position(|&i| i == idx) {
+                    if filtered_pos >= self.visible_range.0 && filtered_pos < self.visible_range.1 {
+                        return Task::done(Message::LoadVisibleThumbnails);
+                    }
                 }
 
                 Task::none()
@@ -349,6 +351,7 @@ impl AppView {
                     .get(self.selected_idx)
                     .and_then(|&idx| self.images.get(idx))
                 {
+                    self.mode = Mode::Normal;
                     let current_wallpaper = CONFIG.current_wallpaper.clone();
                     let post_script = CONFIG.post_script.clone();
 
@@ -415,7 +418,12 @@ impl AppView {
             Message::FilterChanged(value) => {
                 self.filter_value = value;
                 self.compute_filter();
-                Task::done(Message::LoadVisibleThumbnails)
+                self.scroll_offset = 0.0;
+                self.visible_range = (0, self.filtered_indices.len().min(20));
+                Task::batch([
+                    operation::scroll_to("scrollable-id", AbsoluteOffset { x: 0.0, y: 0.0 }),
+                    Task::done(Message::LoadVisibleThumbnails),
+                ])
             }
         }
     }
