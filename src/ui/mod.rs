@@ -204,7 +204,7 @@ impl AppView {
             top: 0.0,
             left: 15.0,
             right: 15.0,
-            bottom: 15.0,
+            bottom: 10.0,
         });
 
         column![
